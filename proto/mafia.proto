@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+
+service Mafia {
+  rpc Connect (Username) returns (stream Users) {}
+  rpc Disconnect (Username) returns (google.protobuf.Empty) {}
+  rpc StartGame (StartGameRequest) returns (StartGameResponse) {}
+  rpc EndDay (PlayerInfo) returns (EndDayResponse) {}
+  rpc GetPlayersAlive (PlayerInfo) returns (Users) {}
+  rpc CheckMafia (PlayerRequest) returns (CheckMafiaResponse) {}
+  rpc PublishMafia (PlayerInfo) returns (google.protobuf.Empty) {}
+  rpc Kill (PlayerRequest) returns (google.protobuf.Empty) {}
+  rpc EndNight (PlayerInfo) returns (EndNightResponse) {}
+  rpc CheckWinner (PlayerInfo) returns (Winner) {}
+  rpc Execute (PlayerRequest) returns (Username) {}
+  rpc GetRoles (PlayerInfo) returns (Roles) {}
+}
+
+message Username {
+  string name = 1;
+}
+
+message Users {
+  repeated Username username = 1;
+}
+
+message StartGameRequest {
+  Username player = 1;
+  Users players = 2;
+}
+
+message StartGameResponse {
+  int64 game_id = 1;
+  string role = 2;
+}
+
+message PlayerInfo {
+  int64 game_id = 1;
+  Username username = 2;
+}
+
+message EndDayResponse {
+  bool do_action = 1;
+}
+
+message PlayerRequest {
+  PlayerInfo info = 1;
+  Username player = 2;
+}
+
+message CheckMafiaResponse {
+  bool is_mafia = 1;
+}
+
+message EndNightResponse {
+  Username killed = 1;
+  Username mafia = 2;
+}
+
+message Roles {
+  map<string, string> roles = 1;
+}
+
+message Winner {
+  string winner = 1;
+}

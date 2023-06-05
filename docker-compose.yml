@@ -1,0 +1,16 @@
+version: "3.9"
+
+services:
+  server:
+    container_name: server
+    build:
+      dockerfile: server/Dockerfile
+    ports:
+      - 50051:50051
+
+  client:
+    container_name: client
+    build:
+      dockerfile: client/Dockerfile
+    depends_on:
+      - server
