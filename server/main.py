@@ -149,8 +149,6 @@ class Mafia(MafiaServicer):
 
     def Connect(self, request, context):
         with self.cv:
-            self.cv.notify_all()
-
             username = request.name
 
             self.users[username] = 0
@@ -166,6 +164,8 @@ class Mafia(MafiaServicer):
                 yield Users(username=[Username(name=name) for name in self.users.keys()])
 
                 if len(self.users) == 4:
+                    self.cv.notify_all()
+
                     self.left_lobby += 1
                     if self.left_lobby == 4:
                         self.users = dict()
@@ -274,6 +274,7 @@ class Mafia(MafiaServicer):
             self.ready_to_end += 1
             if self.ready_to_end == 4:
                 del self.games[request.game_id]
+                self.ready_to_end = 0
 
         return Roles(roles=roles)
 
