@@ -12,3 +12,10 @@ services:
     container_name: client
     build:
       dockerfile: client/Dockerfile
+
+  rabbitmq:
+    container_name: rabbitmq
+    image: rabbitmq:3-management
+    ports:
+      - 15672:15672
+      - 5672:5672

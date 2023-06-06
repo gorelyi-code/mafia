@@ -1,5 +1,7 @@
 import asyncio
 from random import choice
+from aio_pika import ExchangeType, connect, Message, DeliveryMode
+from concurrent.futures import ThreadPoolExecutor
 
 import grpc
 from mafia_pb2 import Username, StartGameRequest, PlayerRequest, PlayerInfo
@@ -163,8 +165,46 @@ async def execution(stub, player_info):
     else:
         print(f'No one has been executed')
 
+async def on_message(message) -> None:
+    async with message.process():
+        print(message.body.decode())
 
-async def game(username):
+
+async def ainput(prompt: str = "") -> str:
+    with ThreadPoolExecutor(1, "AsyncInput") as executor:
+        return await asyncio.get_event_loop().run_in_executor(executor, input, prompt)
+    
+
+async def chat(name, game_id):
+    print(f'Starting {name} chat')
+    print('Type an empty message to end chat')
+
+    connection = await connect("amqp://guest:guest@rabbitmq/")
+
+    async with connection:
+        channel = await connection.channel()
+
+        exchange = await channel.declare_exchange(name, ExchangeType.DIRECT)
+
+        queue = await channel.declare_queue(exclusive=True)
+
+        await queue.bind(exchange, routing_key=str(game_id))
+
+        await queue.consume(on_message)
+
+        while True:
+            text = await ainput()
+            if not text:
+                break
+        
+            message = Message(f'{username.name}: {text}'.encode(), delivery_mode=DeliveryMode.PERSISTENT)
+
+            await exchange.publish(message, routing_key=str(game_id))
+
+    print(f'You have left {name} chat')
+
+
+async def game():
     async with grpc.aio.insecure_channel('server:50051') as channel:
         stub = MafiaStub(channel)
 
@@ -173,12 +213,16 @@ async def game(username):
         player_info, role = await start(stub, users)
 
         while True:
+            await chat('all', player_info.game_id)
+
             do_action = await end_day(stub, player_info)
 
             if do_action:
                 if role == 'Комиссар':
                     await test_mafia(stub, player_info)
                 elif role == 'Мафия':
+                    await chat('mafia', player_info.game_id)
+
                     await kill(stub, player_info)
 
             await end_night(stub, player_info)
@@ -204,7 +248,7 @@ if __name__ == '__main__':
     while True:
         alive = True
 
-        asyncio.run(game(username))
+        asyncio.run(game())
 
         print('Would you like to play again? (Yes/No)')
         if input() != 'Yes':
