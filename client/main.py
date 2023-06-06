@@ -176,8 +176,7 @@ async def ainput(prompt: str = "") -> str:
     
 
 async def chat(name, game_id):
-    print(f'Starting {name} chat')
-    print('Type an empty message to end chat')
+    print(f'Starting {name} chat. Type an empty message to end chat')
 
     connection = await connect("amqp://guest:guest@rabbitmq/")
 
@@ -205,6 +204,8 @@ async def chat(name, game_id):
 
 
 async def game():
+    global alive
+
     async with grpc.aio.insecure_channel('server:50051') as channel:
         stub = MafiaStub(channel)
 
@@ -213,7 +214,8 @@ async def game():
         player_info, role = await start(stub, users)
 
         while True:
-            await chat('all', player_info.game_id)
+            if alive:
+                await chat('all', player_info.game_id)
 
             do_action = await end_day(stub, player_info)
 
