@@ -2,6 +2,8 @@ import os
 from concurrent import futures
 from threading import Lock, Condition
 from random import sample, seed
+import asyncio
+from copy import copy
 
 import grpc
 from google.protobuf.empty_pb2 import Empty
@@ -9,63 +11,81 @@ from mafia_pb2 import Username, Users, StartGameResponse, EndDayResponse, CheckM
 from mafia_pb2_grpc import MafiaServicer, add_MafiaServicer_to_server
 
 
+class Latch:
+    def __init__(self, count, callback):
+        self.cur = 0
+        self.count = count
+        self.callback = callback
+
+    def __call__(self, *args):
+        self.cur += 1
+        if self.cur == self.count:
+            self.cur = 0
+            self.callback(*args)
+
+
 class MafiaGame:
     def __init__(self, player_roles):
         self.player_roles = player_roles
         self.players_alive = [username for username in player_roles]
 
-        self.waiting = 4
-        self.next_waiting = 0
+        self.ready_to_wake = False
+        self.waiting = Latch(4, self.WakeEveryone)
+        self.not_waiting = Latch(4, self.SleepEveryone)
         
-        self.voted = 0
         self.execute_votes = {username: 0 for username in player_roles}
-        self.next_votes = 0
-        self.people_knowing_executed=0
+        self.end_voting = False
+        self.voted = Latch(4, self.EndVoting)
+        self.know_executed = Latch(4, self.StartVoting)
 
         self.mafia = ''
-        self.knowing_mafia = 0
+        self.know_mafia = Latch(4, self.ResetMafia)
 
-        self.lock = Lock()
-        self.cv = Condition(self.lock)
+    def WakeEveryone(self):
+        self.ready_to_wake = True
 
-    def GetPlayerRole(self, username):
+    def SleepEveryone(self):
+        self.ready_to_wake = False
+
+    def EndVoting(self):
+        self.end_voting = True
+
+    def StartVoting(self, player_executed):
+        self.end_voting = False
+
+        if player_executed:
+            self.players_alive.remove(player_executed)
+
+    def ResetMafia(self):
+        self.mafia = ''
+
+    async def GetPlayerRole(self, username):
         return self.player_roles[username]
 
-    def GetRoles(self):
+    async def GetRoles(self):
         return self.player_roles
 
-    def GetPlayersAlive(self):
-        with self.cv:
-            return self.players_alive
+    async def GetPlayersAlive(self):
+        return self.players_alive
 
-    def SetKilled(self, username):
+    async def SetKilled(self, username):
         self.killed = username
 
-    def GetKilled(self):
-        with self.cv:
-            if self.killed in self.players_alive:
-                self.players_alive.remove(self.killed)
+    async def GetKilled(self):
+        if self.killed in self.players_alive:
+            self.players_alive.remove(self.killed)
 
         return self.killed
 
-    def ResetWaiting(self):
-        with self.cv:
-            self.next_waiting += 1
-            if self.next_waiting == 4:
-                self.waiting = 4
-                self.next_waiting = 0
+    async def WaitNight(self):
+        self.waiting()
 
-    def WaitNight(self):
-        with self.cv:
-            self.waiting -= 1
+        while not self.ready_to_wake:
+            await asyncio.sleep(0.001)
 
-            if self.waiting == 0:
-                self.cv.notify_all()
+        self.not_waiting()
 
-            while self.waiting != 0:
-                self.cv.wait()
-
-    def CheckWinner(self):
+    async def CheckWinner(self):
         civilians_left = 3
         for player, role in self.player_roles.items():
             if role == 'Мафия' and player not in self.players_alive:
@@ -79,25 +99,14 @@ class MafiaGame:
         else:
             return ''
 
-    def ResetVotes(self):
-        with self.cv:
-            self.next_votes += 1
-            if self.next_votes == 4:
-                self.voted = 0
-                self.next_votes = 0
+    async def VoteExecute(self, username):
+        self.voted()
 
-    def VoteExecute(self, username):
-        with self.cv:
-            self.voted += 1
-
-            if self.voted == 4:
-                self.cv.notify_all()
-
-            if username:
-                self.execute_votes[username] += 1
-            
-            while self.voted != 4:
-                self.cv.wait()
+        if username:
+            self.execute_votes[username] += 1
+        
+        while not self.end_voting:
+            await asyncio.sleep(0.001)
 
         max_votes = 0
         player_executed = ''
@@ -109,27 +118,20 @@ class MafiaGame:
             elif votes == max_votes:
                 player_executed = ''
 
-        if player_executed:
-            self.people_knowing_executed += 1
-            if self.people_knowing_executed == 4:
-                self.players_alive.remove(player_executed)
-                self.people_knowing_executed = 0
+        self.know_executed(player_executed)
 
         return player_executed
 
-    def PublishMafia(self):
-        with self.cv:
-            for player, role in self.player_roles.items():
-                if role == 'Мафия':
-                    self.mafia = player
+    async def PublishMafia(self):
+        for player, role in self.player_roles.items():
+            if role == 'Мафия':
+                self.mafia = player
 
-    def GetMafia(self):
-        with self.cv:
-            mafia = self.mafia
-            self.knowing_mafia += 1
-            if self.knowing_mafia == 4:
-                self.mafia = ''
-                self.knowing_mafia = 0
+    async def GetMafia(self):
+        mafia = self.mafia
+
+        self.know_mafia()
+
         return mafia
 
 
@@ -137,151 +139,143 @@ class Mafia(MafiaServicer):
     ROLES = ['Мафия', 'Комиссар', 'Мирный', 'Мирный']
 
     def __init__(self):
-        self.users = dict()
+        self.users = set()
 
         self.games = dict()
 
-        self.lock = Lock()
-        self.cv = Condition(self.lock)
+        self.users_left = Latch(4, self.ResetUsers)
+        self.users_ending = Latch(4, self.DeleteGame)
 
-        self.left_lobby = 0
-        self.ready_to_end = 0
+    def ResetUsers(self):
+        self.users = set()
 
-    def Connect(self, request, context):
-        with self.cv:
-            username = request.name
+    def DeleteGame(self, game_id):
+        del self.games[game_id]
 
-            self.users[username] = 0
+    async def Connect(self, request, context):
+        username = request.name
 
-            for user in self.users:
-                self.users[user] += 1
+        users = set()
 
-            while True:
-                while self.users[username] == 0:
-                    self.cv.wait()
+        self.users.add(username)
 
-                self.users[username] -= 1
-                yield Users(username=[Username(name=name) for name in self.users.keys()])
+        while len(users) != 4:
+            if users != self.users:
+                users = copy(self.users)
+                yield Users(username=[Username(name=name) for name in self.users])
+        
+            await asyncio.sleep(0.01)
 
-                if len(self.users) == 4:
-                    self.cv.notify_all()
-
-                    self.left_lobby += 1
-                    if self.left_lobby == 4:
-                        self.users = dict()
-                        self.left_lobby = 0
-                    break
+        self.users_left()
     
-    def Disconnect(self, request, context):
-        with self.cv:
-            self.cv.notify_all()
+    async def Disconnect(self, request, context):
+        username = request.name
 
-            username = request.name
+        self.users.remove(username)
 
-            del self.users[username]
+        return Empty()
 
-            for actions in self.users.values():
-                actions += 1
-
-            return Empty()
-
-    def StartGame(self, request, context):
+    async def StartGame(self, request, context):
         players = [player.name for player in request.players.username]
 
         game_hash = hash(tuple(players))
 
         seed(game_hash)
 
-        with self.cv:
-            if game_hash not in self.games:
-                game = MafiaGame(dict(zip(players, sample(self.ROLES, k=4))))
+        if game_hash not in self.games:
+            game = MafiaGame(dict(zip(players, sample(self.ROLES, k=4))))
 
-                self.games[game_hash] = game
-            else :
-                game = self.games[game_hash]
+            self.games[game_hash] = game
+        else :
+            game = self.games[game_hash]
 
-            return StartGameResponse(game_id=game_hash, role=game.GetPlayerRole(request.player.name))
+        role = await game.GetPlayerRole(request.player.name)
 
-    def EndDay(self, request, context):
+        return StartGameResponse(game_id=game_hash, role=role)
+
+    async def EndDay(self, request, context):
         game = self.games[request.game_id]
 
-        player_role = game.GetPlayerRole(request.username.name)
+        player_role = await game.GetPlayerRole(request.username.name)
 
         if player_role in ['Комиссар', 'Мафия']:
             return EndDayResponse(do_action=True)
         else:
             return EndDayResponse(do_action=False)
 
-    def GetPlayersAlive(self, request, context):
+    async def GetPlayersAlive(self, request, context):
         game = self.games[request.game_id]
 
-        return Users(username=[Username(name=username) for username in game.GetPlayersAlive()])
+        users = await game.GetPlayersAlive()
 
-    def CheckMafia(self, request, context):
+        return Users(username=[Username(name=username) for username in users])
+
+    async def CheckMafia(self, request, context):
         game = self.games[request.info.game_id]
         player = request.player.name
 
-        return CheckMafiaResponse(is_mafia=game.GetPlayerRole(player) == 'Мафия')
+        role = await game.GetPlayerRole(player)
 
-    def PublishMafia(self, request, context):
+        return CheckMafiaResponse(is_mafia=role == 'Мафия')
+
+    async def PublishMafia(self, request, context):
         game = self.games[request.game_id]
 
-        game.PublishMafia()
+        await game.PublishMafia()
 
         return Empty()
 
-    def Kill(self, request, context):
+    async def Kill(self, request, context):
         game = self.games[request.info.game_id]
         player = request.player.name
 
-        game.SetKilled(player)
+        await game.SetKilled(player)
 
         return Empty()
 
-    def EndNight(self, request, context):
+    async def EndNight(self, request, context):
         game = self.games[request.game_id]
 
-        game.WaitNight()
+        await game.WaitNight()
 
-        game.ResetWaiting()
+        mafia = await game.GetMafia()
 
-        mafia = game.GetMafia()
+        killed = await game.GetKilled()
 
-        return EndNightResponse(killed=Username(name=game.GetKilled()), mafia=Username(name=mafia))
+        return EndNightResponse(killed=Username(name=killed), mafia=Username(name=mafia))
 
-    def CheckWinner(self, request, context):
+    async def CheckWinner(self, request, context):
         game = self.games[request.game_id]
 
-        winner = game.CheckWinner()
+        winner = await game.CheckWinner()
 
         return Winner(winner=winner)
 
-    def Execute(self, request, context):
+    async def Execute(self, request, context):
         game = self.games[request.info.game_id]
 
-        player_excuted = game.VoteExecute(request.player.name)
-
-        game.ResetVotes()
+        player_excuted = await game.VoteExecute(request.player.name)
 
         return Username(name=player_excuted)
     
-    def GetRoles(self, request, context):
+    async def GetRoles(self, request, context):
         game = self.games[request.game_id]
 
-        roles = game.GetRoles()
+        roles = await game.GetRoles()
 
-        with self.cv:
-            self.ready_to_end += 1
-            if self.ready_to_end == 4:
-                del self.games[request.game_id]
-                self.ready_to_end = 0
+        self.users_ending(request.game_id)
 
         return Roles(roles=roles)
 
 
-server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-add_MafiaServicer_to_server(Mafia(), server)
-listen_addr = f'0.0.0.0:{os.environ.get("SERVER_PORT", 50051)}'
-server.add_insecure_port(listen_addr)
-server.start()
-server.wait_for_termination()
+async def serve():
+    server = grpc.aio.server()
+    add_MafiaServicer_to_server(Mafia(), server)
+    listen_addr = f'0.0.0.0:{os.environ.get("SERVER_PORT", 50051)}'
+    server.add_insecure_port(listen_addr)
+    await server.start()
+    await server.wait_for_termination()
+
+
+if __name__ == '__main__':
+    asyncio.run(serve())
