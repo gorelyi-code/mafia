@@ -165,12 +165,12 @@ async def execution(stub, player_info):
     else:
         print(f'No one has been executed')
 
-async def on_message(message) -> None:
+async def on_message(message):
     async with message.process():
         print(message.body.decode())
 
 
-async def ainput(prompt: str = "") -> str:
+async def ainput(prompt):
     with ThreadPoolExecutor(1, "AsyncInput") as executor:
         return await asyncio.get_event_loop().run_in_executor(executor, input, prompt)
     
