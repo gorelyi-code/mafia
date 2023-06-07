@@ -1,2 +1,4 @@
-grpcio-tools
 aio_pika
+grpcio-tools
+pydantic
+requests

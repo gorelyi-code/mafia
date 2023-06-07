@@ -1,9 +1,11 @@
 import asyncio
 import os
+import requests
 from random import choice
 from aio_pika import ExchangeType, connect, Message, DeliveryMode
 from concurrent.futures import ThreadPoolExecutor
 from signal import SIGINT
+from lib.common_objects import PlayerProfile
 
 import grpc
 import proto.mafia_pb2_grpc as proto_grpc
@@ -277,6 +279,71 @@ async def game():
                 return
 
 
+def create_profile():
+    clear()
+
+    print('username:', end=' ')
+    name = input()
+
+    print('picture:', end=' ')
+    picture = input()
+
+    print('sex:', end=' ')
+    sex = input()
+
+    print('email:', end=' ')
+    email = input()
+
+    player = PlayerProfile(username=name, picture=picture, sex=sex, email=email)
+
+    requests.put(f'http://rest_server:13372/register', data=player.json())
+
+
+def modify_profile():
+    clear()
+
+    while True:
+        print('Whose profile would you like to modify?')
+        name = input()
+
+        print('What would you like to modify? (username/picture/sex/email)')
+        to_modify = input()
+
+        print('What should the new value be?')
+        value = input()
+
+        response = requests.post(f'http://rest_server:13372/modify/{name}', params={'to_modify': to_modify, 'value': value})
+        if response.status_code == 404:
+            print('There is no such player! Please, try again')
+        elif response.status_code == 405:
+            print('There is no such attribute! Please, try again')
+        else:
+            break
+         
+
+def get_profile():
+    while True:
+        clear()
+
+        print('Whose profile would you like to check?')
+        response = requests.get(f'http://rest_server:13372/player/{input()}')
+        if response.status_code == 404:
+            print('There is no such player! Please, try again')
+        else:
+            clear()
+
+            for key, value in response.json().items():
+                print(f'{key}: {value}')
+
+        while True:
+            print('Would you like to get other person`s statistics? (Yes/No)')
+            more_stat = input()
+            if more_stat == 'Yes':
+                break
+            elif more_stat == 'No':
+                return
+
+
 if __name__ == '__main__':
     while True:
         clear()
@@ -284,14 +351,16 @@ if __name__ == '__main__':
         print('Welcome to SOAmafia!')
         print('What would you like to do?')
         print('A: Play game')
-        print('B: Inspect statistics (WIP)')
-        print('C: Exit')
+        print('B: Create player profile')
+        print('C: Modify player profile')
+        print('D: Get player profile')
+        print('E: Exit')
         option = input()
-
-        clear()
 
         match option:
             case 'A':
+                clear()
+
                 print('Please, tell me your name: ', end='')
                 username = proto.Username(name=input())
 
@@ -307,6 +376,10 @@ if __name__ == '__main__':
 
                 asyncio.run(game())
             case 'B':
-                pass
+                create_profile()
             case 'C':
+                modify_profile()
+            case 'D':
+                get_profile()
+            case 'E':
                 break

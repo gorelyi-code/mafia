@@ -3,9 +3,9 @@ FROM python:3.10-slim
 WORKDIR server
 
 COPY proto/mafia.proto proto/mafia.proto
-ADD server/lib lib
-COPY server/main.py .
-COPY server/requirements.txt .
+COPY grpc_server/lib lib
+COPY grpc_server/main.py .
+COPY grpc_server/requirements.txt .
 
 RUN pip install -r requirements.txt
 

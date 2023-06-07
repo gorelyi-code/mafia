@@ -1,14 +1,12 @@
 version: "3.9"
 
 services:
-  server:
-    container_name: server
+  grpc_server:
+    container_name: grpc_server
     build:
-      dockerfile: server/Dockerfile
+      dockerfile: grpc_server/Dockerfile
     ports:
       - 50051:50051
-    environment:
-    - PYTHONUNBUFFERED=1
 
   client:
     container_name: client
@@ -19,5 +17,11 @@ services:
     container_name: rabbitmq
     image: rabbitmq:3-management
     ports:
-      - 15672:15672
       - 5672:5672
+
+  rest_server:
+    container_name: rest_server
+    build:
+      dockerfile: rest_server/Dockerfile
+    ports:
+      - 13372:13372

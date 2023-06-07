@@ -3,6 +3,7 @@ FROM python:3.10-slim
 WORKDIR client
 
 COPY proto/mafia.proto proto/mafia.proto
+COPY lib lib
 COPY client/main.py .
 COPY client/requirements.txt .
 
