@@ -2,7 +2,7 @@ import asyncio
 from random import choice
 from aio_pika import ExchangeType, connect, Message, DeliveryMode
 from concurrent.futures import ThreadPoolExecutor
-from signal import signal, SIGINT, SIG_DFL
+from signal import SIGINT
 
 import grpc
 from mafia_pb2 import Username, StartGameRequest, PlayerRequest, PlayerInfo
@@ -34,10 +34,11 @@ def leave():
 
 
 async def join_lobby():
-    asyncio.get_running_loop().add_signal_handler(SIGINT, leave)
+    original = asyncio.get_running_loop().add_signal_handler(SIGINT, leave)
 
     async for users in stub.Connect(username):
         if should_leave:
+            asyncio.get_running_loop().add_signal_handler(SIGINT, original)
             break
 
         if users.username:
@@ -47,7 +48,7 @@ async def join_lobby():
             if len(users.username) == 4:
                 break
     
-    asyncio.get_running_loop().add_signal_handler(SIGINT, SIG_DFL)
+    asyncio.get_running_loop().add_signal_handler(SIGINT, original)
 
     return users
 
@@ -222,7 +223,7 @@ async def game():
 
         users = await join_lobby()
         if should_leave:
-            exit()
+            return
 
         player_info, role = await start(users)
 
@@ -254,15 +255,27 @@ async def game():
 
 
 if __name__ == '__main__':
-    print('Please, tell me your name: ', end='')
-    username = Username(name=input())
-
-    print('Do you want to play in auto mode? (Yes/No)')
-    auto_mode = True if input() == 'Yes' else False
-
     while True:
-        asyncio.run(game())
+        print('Welcome to SOAmafia!')
+        print('What would you like to do?')
+        print('A: Play game')
+        print('B: Inspect statistics (WIP)')
+        print('C: Exit')
+        match input():
+            case 'A':
+                print('Please, tell me your name: ', end='')
+                username = Username(name=input())
 
-        print('Would you like to play again? (Yes/No)')
-        if input() != 'Yes':
-            break
+                print('Do you want to play in auto mode? (Yes/No)')
+                auto_mode = True if input() == 'Yes' else False
+
+                while True:
+                    asyncio.run(game())
+
+                    print('Would you like to play again? (Yes/No)')
+                    if input() != 'Yes':
+                        break
+            case 'B':
+                pass
+            case 'C':
+                break
