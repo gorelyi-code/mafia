@@ -5,8 +5,8 @@ from concurrent.futures import ThreadPoolExecutor
 from signal import SIGINT
 
 import grpc
-from mafia_pb2 import Username, StartGameRequest, PlayerRequest, PlayerInfo
-from mafia_pb2_grpc import MafiaStub
+from proto.mafia_pb2 import Username, StartGameRequest, PlayerRequest, PlayerInfo
+from proto.mafia_pb2_grpc import MafiaStub
 
 
 async def check_winner(player_info):
