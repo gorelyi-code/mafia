@@ -233,7 +233,7 @@ async def game():
         alive = True
         should_leave = False
 
-        async with grpc.aio.insecure_channel('server:50051') as channel:
+        async with grpc.aio.insecure_channel('grpc_server:50051') as channel:
             stub = proto_grpc.MafiaStub(channel)
 
             users = await join_lobby()

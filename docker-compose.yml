@@ -8,10 +8,12 @@ services:
     ports:
       - 50051:50051
 
-  client:
-    container_name: client
+  rest_server:
+    container_name: rest_server
     build:
-      dockerfile: client/Dockerfile
+      dockerfile: rest_server/Dockerfile
+    ports:
+      - 13372:13372
 
   rabbitmq:
     container_name: rabbitmq
@@ -19,9 +21,7 @@ services:
     ports:
       - 5672:5672
 
-  rest_server:
-    container_name: rest_server
+  client:
+    container_name: client
     build:
-      dockerfile: rest_server/Dockerfile
-    ports:
-      - 13372:13372
+      dockerfile: client/Dockerfile

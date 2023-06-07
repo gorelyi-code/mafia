@@ -23,7 +23,11 @@ class Mafia(proto_grpc.MafiaServicer):
         self.users_left = Latch(4, self.ResetUsers)
         self.users_ending = Latch(4, self.DeleteGame)
 
-    def ResetUsers(self):
+    def ResetUsers(self, users):
+        game_hash = hash(tuple(users))
+
+        self.games[game_hash] = MafiaGame(dict(zip(users, sample(self.ROLES, k=4))))
+
         self.users = set()
 
     def DeleteGame(self, game_id):
@@ -43,7 +47,7 @@ class Mafia(proto_grpc.MafiaServicer):
 
             await asyncio.sleep(0.001)
 
-        self.users_left()
+        self.users_left(users)
 
     async def Disconnect(self, request, context):
         username = request.name
@@ -57,14 +61,7 @@ class Mafia(proto_grpc.MafiaServicer):
 
         game_hash = hash(tuple(players))
 
-        seed(game_hash)
-
-        if game_hash not in self.games:
-            game = MafiaGame(dict(zip(players, sample(self.ROLES, k=4))))
-
-            self.games[game_hash] = game
-        else:
-            game = self.games[game_hash]
+        game = self.games[game_hash]
 
         role = await game.GetPlayerRole(request.player.name)
 
