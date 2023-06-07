@@ -5,8 +5,8 @@ from copy import copy
 
 import grpc
 from google.protobuf.empty_pb2 import Empty
-import proto.mafia_pb2 as proto
 import proto.mafia_pb2_grpc as proto_grpc
+import proto.mafia_pb2 as proto
 
 from lib.latch import Latch
 from lib.mafia_game import MafiaGame
@@ -40,11 +40,11 @@ class Mafia(proto_grpc.MafiaServicer):
             if users != self.users:
                 users = copy(self.users)
                 yield proto.Users(username=[proto.Username(name=name) for name in self.users])
-        
+
             await asyncio.sleep(0.001)
 
         self.users_left()
-    
+
     async def Disconnect(self, request, context):
         username = request.name
 
@@ -63,7 +63,7 @@ class Mafia(proto_grpc.MafiaServicer):
             game = MafiaGame(dict(zip(players, sample(self.ROLES, k=4))))
 
             self.games[game_hash] = game
-        else :
+        else:
             game = self.games[game_hash]
 
         role = await game.GetPlayerRole(request.player.name)
@@ -134,7 +134,7 @@ class Mafia(proto_grpc.MafiaServicer):
         player_excuted = await game.VoteExecute(request.player.name)
 
         return proto.Username(name=player_excuted)
-    
+
     async def GetRoles(self, request, context):
         game = self.games[request.game_id]
 
