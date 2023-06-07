@@ -24,7 +24,7 @@ class Mafia(proto_grpc.MafiaServicer):
         self.users_ending = Latch(4, self.DeleteGame)
 
     def ResetUsers(self, users):
-        game_hash = hash(tuple(users))
+        game_hash = hash(tuple([user for user in users]))
 
         self.games[game_hash] = MafiaGame(dict(zip(users, sample(self.ROLES, k=4))))
 
