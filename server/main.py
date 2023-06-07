@@ -162,7 +162,7 @@ class Mafia(MafiaServicer):
                 users = copy(self.users)
                 yield Users(username=[Username(name=name) for name in self.users])
         
-            await asyncio.sleep(0.01)
+            await asyncio.sleep(0.001)
 
         self.users_left()
     

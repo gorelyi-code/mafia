@@ -2,13 +2,14 @@ import asyncio
 from random import choice
 from aio_pika import ExchangeType, connect, Message, DeliveryMode
 from concurrent.futures import ThreadPoolExecutor
+from signal import signal, SIGINT, SIG_DFL
 
 import grpc
 from mafia_pb2 import Username, StartGameRequest, PlayerRequest, PlayerInfo
 from mafia_pb2_grpc import MafiaStub
 
 
-async def check_winner(stub, player_info):
+async def check_winner(player_info):
     response = await stub.CheckWinner(player_info)
     winner = response.winner
     if winner:
@@ -25,26 +26,33 @@ async def check_winner(stub, player_info):
     return False
 
 
-async def join_lobby(stub):
+def leave():
+    global should_leave
+    should_leave = True
+
+    asyncio.ensure_future(stub.Disconnect(username))
+
+
+async def join_lobby():
+    asyncio.get_running_loop().add_signal_handler(SIGINT, leave)
+
     async for users in stub.Connect(username):
+        if should_leave:
+            break
+
         if users.username:
             print('Users:', end=' ')
             print(*[user.name for user in users.username], sep=', ')
-
-            if not auto_mode:
-                print('The game will start when 4 people join')
-                print('Would you like to quit? (Yes/No)')
-                if input() == 'Yes':
-                    await stub.Disconnect(username)
-                    exit()
-
+                    
             if len(users.username) == 4:
                 break
+    
+    asyncio.get_running_loop().add_signal_handler(SIGINT, SIG_DFL)
 
     return users
 
 
-async def start(stub, users):
+async def start(users):
     response = await stub.StartGame(StartGameRequest(player=username, players=users))
 
     role = response.role
@@ -53,16 +61,16 @@ async def start(stub, users):
     return PlayerInfo(game_id=response.game_id, username=username), role
 
 
-async def end_day(stub, player_info):
+async def end_day(player_info):
     response = await stub.EndDay(player_info)
     return response.do_action
 
 
-async def test_mafia(stub, player_info):
+async def test_mafia(player_info):
     print('Please choose the player to test for being mafia')
 
     if auto_mode:
-        players_alive = await get_alive(stub, player_info)
+        players_alive = await get_alive(player_info)
         if username.name in players_alive:
             players_alive.remove(username.name)
 
@@ -89,11 +97,11 @@ async def test_mafia(stub, player_info):
         print('The player you chose is not mafia')
 
 
-async def kill(stub, player_info):
+async def kill(player_info):
     print('Please choose the player who will be killed')
 
     if auto_mode:
-        players_alive = await get_alive(stub, player_info)
+        players_alive = await get_alive(player_info)
         if username.name in players_alive:
             players_alive.remove(username.name)
 
@@ -106,7 +114,7 @@ async def kill(stub, player_info):
     await stub.Kill(PlayerRequest(info=player_info, player=player))
 
 
-async def end_night(stub, player_info):
+async def end_night(player_info):
     global alive
 
     end_night_response = await stub.EndNight(player_info)
@@ -122,18 +130,18 @@ async def end_night(stub, player_info):
         print(f'{player_mafia} is mafia')
 
 
-async def get_alive(stub, player_info):
+async def get_alive(player_info):
     response = await stub.GetPlayersAlive(player_info)
     return [user.name for user in response.username]
     
 
-async def print_alive(stub, player_info):
-    players_alive = await get_alive(stub, player_info)
+async def print_alive(player_info):
+    players_alive = await get_alive(player_info)
     print('People still alive:', end=' ')
     print(*players_alive, sep=', ')
 
 
-async def execution(stub, player_info):
+async def execution(player_info):
     global alive
 
     print('Starting day execution')
@@ -141,7 +149,7 @@ async def execution(stub, player_info):
         print('Please choose the player who will be executed (Empty to not execute anyone)')
 
         if auto_mode:
-            players_alive = await get_alive(stub, player_info)
+            players_alive = await get_alive(player_info)
             if username.name in players_alive:
                 players_alive.remove(username.name)
             players_alive.append('')
@@ -170,9 +178,9 @@ async def on_message(message):
         print(message.body.decode())
 
 
-async def ainput(prompt):
+async def ainput():
     with ThreadPoolExecutor(1, "AsyncInput") as executor:
-        return await asyncio.get_event_loop().run_in_executor(executor, input, prompt)
+        return await asyncio.get_event_loop().run_in_executor(executor, input)
     
 
 async def chat(name, game_id):
@@ -204,39 +212,44 @@ async def chat(name, game_id):
 
 
 async def game():
-    global alive
+    global alive, stub, should_leave
+
+    alive = True
+    should_leave = False
 
     async with grpc.aio.insecure_channel('server:50051') as channel:
         stub = MafiaStub(channel)
 
-        users = await join_lobby(stub)
+        users = await join_lobby()
+        if should_leave:
+            exit()
 
-        player_info, role = await start(stub, users)
+        player_info, role = await start(users)
 
         while True:
             if alive:
                 await chat('all', player_info.game_id)
 
-            do_action = await end_day(stub, player_info)
+            do_action = await end_day(player_info)
 
             if do_action:
                 if role == 'Комиссар':
-                    await test_mafia(stub, player_info)
+                    await test_mafia(player_info)
                 elif role == 'Мафия':
                     await chat('mafia', player_info.game_id)
 
-                    await kill(stub, player_info)
+                    await kill(player_info)
 
-            await end_night(stub, player_info)
+            await end_night(player_info)
 
-            if await check_winner(stub, player_info):
+            if await check_winner(player_info):
                 break
 
-            await print_alive(stub, player_info)
+            await print_alive(player_info)
 
-            await execution(stub, player_info)
+            await execution(player_info)
 
-            if await check_winner(stub, player_info):
+            if await check_winner(player_info):
                 break
 
 
@@ -248,8 +261,6 @@ if __name__ == '__main__':
     auto_mode = True if input() == 'Yes' else False
 
     while True:
-        alive = True
-
         asyncio.run(game())
 
         print('Would you like to play again? (Yes/No)')
