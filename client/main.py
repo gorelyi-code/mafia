@@ -1,4 +1,5 @@
 import asyncio
+import os
 from random import choice
 from aio_pika import ExchangeType, connect, Message, DeliveryMode
 from concurrent.futures import ThreadPoolExecutor
@@ -7,6 +8,10 @@ from signal import SIGINT
 import grpc
 from proto.mafia_pb2 import Username, StartGameRequest, PlayerRequest, PlayerInfo
 from proto.mafia_pb2_grpc import MafiaStub
+
+
+def clear():
+    os.system('clear')
 
 
 async def check_winner(player_info):
@@ -225,6 +230,8 @@ async def game():
         if should_leave:
             return
 
+        clear()
+
         player_info, role = await start(users)
 
         while True:
@@ -256,12 +263,18 @@ async def game():
 
 if __name__ == '__main__':
     while True:
+        clear()
+
         print('Welcome to SOAmafia!')
         print('What would you like to do?')
         print('A: Play game')
         print('B: Inspect statistics (WIP)')
         print('C: Exit')
-        match input():
+        option = input()
+
+        clear()
+
+        match option:
             case 'A':
                 print('Please, tell me your name: ', end='')
                 username = Username(name=input())
@@ -270,6 +283,8 @@ if __name__ == '__main__':
                 auto_mode = True if input() == 'Yes' else False
 
                 while True:
+                    clear()
+                    
                     asyncio.run(game())
 
                     print('Would you like to play again? (Yes/No)')
