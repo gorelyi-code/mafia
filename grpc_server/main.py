@@ -1,6 +1,8 @@
 import os
 import asyncio
-from random import sample, seed
+import requests
+from datetime import datetime
+from random import sample
 from copy import copy
 
 import grpc
@@ -30,7 +32,20 @@ class Mafia(proto_grpc.MafiaServicer):
 
         self.users = set()
 
-    def DeleteGame(self, game_id):
+    def DeleteGame(self, game_id, winner, roles, start):
+        if winner == 'Мафия':
+            for player, role in roles.items():
+                if role == 'Мафия':
+                    requests.post(f'http://rest_server:13372/result/{player}', params={'won': True, 'time': datetime.now() - start})
+                else:
+                    requests.post(f'http://rest_server:13372/result/{player}', params={'won': False, 'time': datetime.now() - start})
+        elif winner == 'Мирные':
+            for player, role in roles.items():
+                if role == 'Мафия':
+                    requests.post(f'http://rest_server:13372/result/{player}', params={'won': False, 'time': datetime.now() - start})
+                else:
+                    requests.post(f'http://rest_server:13372/result/{player}', params={'won': True, 'time': datetime.now() - start})
+
         del self.games[game_id]
 
     async def Connect(self, request, context):
@@ -112,16 +127,16 @@ class Mafia(proto_grpc.MafiaServicer):
 
         await game.WaitNight()
 
-        mafia = await game.GetMafia()
+        mafia = game.GetMafia()
 
-        killed = await game.GetKilled()
+        killed = game.GetKilled()
 
         return proto.EndNightResponse(killed=proto.Username(name=killed), mafia=proto.Username(name=mafia))
 
     async def CheckWinner(self, request, context):
         game = self.games[request.game_id]
 
-        winner = await game.CheckWinner()
+        winner = game.CheckWinner()
 
         return proto.Winner(winner=winner)
 
@@ -135,9 +150,9 @@ class Mafia(proto_grpc.MafiaServicer):
     async def GetRoles(self, request, context):
         game = self.games[request.game_id]
 
-        roles = await game.GetRoles()
+        roles = game.GetRoles()
 
-        self.users_ending(request.game_id)
+        self.users_ending(request.game_id, game.CheckWinner(), roles, game.GetStart())
 
         return proto.Roles(roles=roles)
 

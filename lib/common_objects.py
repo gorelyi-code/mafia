@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from datetime import timedelta
 
 class PlayerProfile(BaseModel):
     username: str
@@ -11,4 +12,4 @@ class PlayerStatistics(BaseModel):
     games_played: int
     games_won: int
     games_lost: int
-    time_played: float
+    time_played: timedelta

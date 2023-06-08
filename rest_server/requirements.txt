@@ -1,2 +1,3 @@
-uvicorn
+borb
 fastapi
+uvicorn

@@ -225,7 +225,19 @@ async def chat(name, game_id):
 
 
 async def game():
-    global alive, stub, should_leave
+    global alive, stub, should_leave, auto_mode
+
+    clear()
+
+    while True:
+        print('Do you want to play in auto mode? (Yes/No)')
+        want_auto = input()
+        if want_auto == 'Yes':
+            auto_mode = True
+            break
+        elif want_auto == 'No':
+            auto_mode = False
+            break
 
     while True:
         clear()
@@ -280,11 +292,6 @@ async def game():
 
 
 def create_profile():
-    clear()
-
-    print('username:', end=' ')
-    name = input()
-
     print('picture:', end=' ')
     picture = input()
 
@@ -294,7 +301,7 @@ def create_profile():
     print('email:', end=' ')
     email = input()
 
-    player = PlayerProfile(username=name, picture=picture, sex=sex, email=email)
+    player = PlayerProfile(username=username.name, picture=picture, sex=sex, email=email)
 
     requests.put(f'http://rest_server:13372/register', data=player.json())
 
@@ -303,37 +310,59 @@ def modify_profile():
     clear()
 
     while True:
-        print('Whose profile would you like to modify?')
-        name = input()
-
         print('What would you like to modify? (username/picture/sex/email)')
         to_modify = input()
 
         print('What should the new value be?')
         value = input()
 
-        response = requests.post(f'http://rest_server:13372/modify/{name}', params={'to_modify': to_modify, 'value': value})
-        if response.status_code == 404:
-            print('There is no such player! Please, try again')
-        elif response.status_code == 405:
+        response = requests.post(f'http://rest_server:13372/modify/{username.name}', params={'to_modify': to_modify, 'value': value})
+        if response.status_code == 405:
             print('There is no such attribute! Please, try again')
         else:
             break
          
 
-def get_profile():
+def get_profiles():
     while True:
         clear()
 
-        print('Whose profile would you like to check?')
-        response = requests.get(f'http://rest_server:13372/player/{input()}')
+        print('Whose profiles would you like to check? Type usernames, separated with commas')
+        usernames = input()
+        response = requests.get(f'http://rest_server:13372/profile', params={'usernames': usernames})
+        if response.status_code == 404:
+            print('One of the players does not exist! Please, try again')
+        else:
+            clear()
+
+            usernames = usernames.split(', ')
+
+            for i, player_profile in enumerate(response.json()):
+                print(f'{usernames[i]}:')
+                for key, value in player_profile.items():
+                    print(f'{key}: {value}')
+
+        while True:
+            print('Would you like to get other peoples` profiles? (Yes/No)')
+            more_stat = input()
+            if more_stat == 'Yes':
+                break
+            elif more_stat == 'No':
+                return
+
+
+def get_statistics():
+    while True:
+        clear()
+
+        print('Whose statistics would you like to check?')
+        response = requests.get(f'http://rest_server:13372/statistics/{input()}')
         if response.status_code == 404:
             print('There is no such player! Please, try again')
         else:
             clear()
 
-            for key, value in response.json().items():
-                print(f'{key}: {value}')
+            print(response.text)
 
         while True:
             print('Would you like to get other person`s statistics? (Yes/No)')
@@ -345,41 +374,34 @@ def get_profile():
 
 
 if __name__ == '__main__':
+    clear()
+
+    print('Please, tell me your name: ', end='')
+    username = proto.Username(name=input())
+
+    print('Please, fill in some info about you')
+    create_profile()
+    
     while True:
         clear()
 
-        print('Welcome to SOAmafia!')
+        print(f'Welcome to SOAmafia, {username.name}!')
         print('What would you like to do?')
         print('A: Play game')
-        print('B: Create player profile')
-        print('C: Modify player profile')
-        print('D: Get player profile')
+        print('B: Modify your profile')
+        print('C: Get players` profiles')
+        print('D: Get player statistics')
         print('E: Exit')
         option = input()
 
         match option:
             case 'A':
-                clear()
-
-                print('Please, tell me your name: ', end='')
-                username = proto.Username(name=input())
-
-                while True:
-                    print('Do you want to play in auto mode? (Yes/No)')
-                    want_auto = input()
-                    if want_auto == 'Yes':
-                        auto_mode = True
-                        break
-                    elif want_auto == 'No':
-                        auto_mode = False
-                        break
-
                 asyncio.run(game())
             case 'B':
-                create_profile()
-            case 'C':
                 modify_profile()
+            case 'C':
+                get_profiles()
             case 'D':
-                get_profile()
+                get_statistics()
             case 'E':
                 break

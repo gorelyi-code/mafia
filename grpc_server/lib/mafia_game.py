@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 
 from lib.latch import Latch
 
@@ -18,6 +19,8 @@ class MafiaGame:
 
         self.mafia = ''
         self.know_mafia = Latch(4, self.ResetMafia)
+
+        self.start = datetime.now()
 
     def WakeEveryone(self):
         self.ready_to_wake = True
@@ -40,7 +43,7 @@ class MafiaGame:
     async def GetPlayerRole(self, username):
         return self.player_roles[username]
 
-    async def GetRoles(self):
+    def GetRoles(self):
         return self.player_roles
 
     async def GetPlayersAlive(self):
@@ -49,11 +52,14 @@ class MafiaGame:
     async def SetKilled(self, username):
         self.killed = username
 
-    async def GetKilled(self):
+    def GetKilled(self):
         if self.killed in self.players_alive:
             self.players_alive.remove(self.killed)
 
         return self.killed
+
+    def GetStart(self):
+        return self.start
 
     async def WaitNight(self):
         self.waiting()
@@ -63,7 +69,7 @@ class MafiaGame:
 
         self.not_waiting()
 
-    async def CheckWinner(self):
+    def CheckWinner(self):
         civilians_left = 3
         for player, role in self.player_roles.items():
             if role == 'Мафия' and player not in self.players_alive:
@@ -105,7 +111,7 @@ class MafiaGame:
             if role == 'Мафия':
                 self.mafia = player
 
-    async def GetMafia(self):
+    def GetMafia(self):
         mafia = self.mafia
 
         self.know_mafia()
