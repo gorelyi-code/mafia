@@ -351,6 +351,10 @@ def get_profiles():
                 return
 
 
+def remove_profile():
+    requests.delete(f'http://rest_server:13372/remove/{username.name}')
+
+
 def get_statistics():
     while True:
         clear()
@@ -405,3 +409,5 @@ if __name__ == '__main__':
                 get_statistics()
             case 'E':
                 break
+
+    remove_profile()

@@ -43,6 +43,11 @@ async def profile(usernames: str) -> list[PlayerProfile]:
     return result
 
 
+@app.delete('/remove/{username}')
+async def remove(username: str) -> None:
+    del players[username]
+
+
 def generate_pdf(statistics: PlayerStatistics):
     pdf = Document()
     page = Page()
