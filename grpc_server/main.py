@@ -4,6 +4,7 @@ import requests
 from datetime import datetime
 from random import sample
 from copy import copy
+from uuid import uuid4
 
 import grpc
 from google.protobuf.empty_pb2 import Empty
@@ -21,14 +22,19 @@ class Mafia(proto_grpc.MafiaServicer):
         self.users = set()
 
         self.games = dict()
+        self.users_to_game_id = dict()
 
         self.users_left = Latch(4, self.ResetUsers)
         self.users_ending = Latch(4, self.DeleteGame)
 
     def ResetUsers(self, users):
-        game_hash = hash(tuple([user for user in users]))
+        game_id = str(uuid4())
 
-        self.games[game_hash] = MafiaGame(dict(zip(users, sample(self.ROLES, k=4))))
+        users_hash = str(hash(tuple(users)))
+
+        self.users_to_game_id[users_hash] = game_id
+
+        self.games[game_id] = MafiaGame(dict(zip(users, sample(self.ROLES, k=4))))
 
         self.users = set()
 
@@ -74,13 +80,15 @@ class Mafia(proto_grpc.MafiaServicer):
     async def StartGame(self, request, context):
         players = [player.name for player in request.players.username]
 
-        game_hash = hash(tuple(players))
+        users_hash = str(hash(tuple(players)))
 
-        game = self.games[game_hash]
+        game_id = self.users_to_game_id[users_hash]
+
+        game = self.games[game_id]
 
         role = await game.GetPlayerRole(request.player.name)
 
-        return proto.StartGameResponse(game_id=game_hash, role=role)
+        return proto.StartGameResponse(game_id=game_id, role=role)
 
     async def EndDay(self, request, context):
         game = self.games[request.game_id]

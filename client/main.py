@@ -209,7 +209,7 @@ async def chat(name, game_id):
 
         queue = await channel.declare_queue(exclusive=True)
 
-        await queue.bind(exchange, routing_key=str(game_id))
+        await queue.bind(exchange, routing_key=game_id)
 
         await queue.consume(on_message)
 
@@ -220,7 +220,7 @@ async def chat(name, game_id):
 
             message = Message(f'{username.name}: {text}'.encode(), delivery_mode=DeliveryMode.PERSISTENT)
 
-            await exchange.publish(message, routing_key=str(game_id))
+            await exchange.publish(message, routing_key=game_id)
 
     print(f'You have left {name} chat')
 

@@ -31,12 +31,12 @@ message StartGameRequest {
 }
 
 message StartGameResponse {
-  int64 game_id = 1;
+  string game_id = 1;
   string role = 2;
 }
 
 message PlayerInfo {
-  int64 game_id = 1;
+  string game_id = 1;
   Username username = 2;
 }
 
