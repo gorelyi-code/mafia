@@ -32,16 +32,10 @@
 
 # Запуск и тестирование
 
-Для начала необходимо собрать образы:
+## Запуск серверов
 
 ```
-docker compose build
-```
-
-## Запуск сервера
-
-```
-docker compose up grpc_server rest_server graphql_server rabbitmq
+docker compose up --build grpc_server rest_server graphql_server rabbitmq
 ```
 
 Необходимо запустить в отдельном терминале.
@@ -49,7 +43,7 @@ docker compose up grpc_server rest_server graphql_server rabbitmq
 ## Запуск клиента
 
 ```
-docker compose run client
+docker compose run --build --rm client
 ```
 
 Необходимо запустить по одному клиенту на терминал.
