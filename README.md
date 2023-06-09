@@ -41,7 +41,7 @@ docker compose build
 ## Запуск сервера
 
 ```
-docker compose up grpc_server rest_server rabbitmq
+docker compose up grpc_server rest_server graphql_server rabbitmq
 ```
 
 Необходимо запустить в отдельном терминале.

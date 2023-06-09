@@ -1,0 +1,26 @@
+schema {
+    query: Query
+}
+
+type PlayerScore {
+    username: String!
+    score: Int!
+}
+
+type GameInfo {
+    id: ID!
+    scoreboard: [PlayerScore]!
+    players: [String]!
+    comments: [String]
+}
+
+type ScoreboardResult {
+    scoreboard: [PlayerScore]!
+    error: String
+}
+
+type Query {
+    getGames: [GameInfo]
+    getScoreboard(id: ID!): ScoreboardResult!
+    addComment(id: ID!, comment: String!): String
+}

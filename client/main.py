@@ -1,6 +1,7 @@
 import asyncio
 import os
 import requests
+import json
 from random import choice
 from aio_pika import ExchangeType, connect, Message, DeliveryMode
 from concurrent.futures import ThreadPoolExecutor
@@ -377,6 +378,96 @@ def get_statistics():
                 return
 
 
+def get_games():
+    while True:
+        clear()
+
+        query = """
+        {
+            getGames {
+                id
+                scoreboard {
+                    username
+                    score
+                }
+                players
+                comments
+            }
+        }
+        """
+        
+        response = requests.post('http://graphql_server:13371/graphql', json={'query': query})
+
+        for game_info in json.loads(response.content.decode())['data']['getGames']:
+            print(f'Game {game_info["id"]}')
+            print(f'Players: {game_info["players"]}')
+            print('Scoreboard:')
+            for player_score in game_info['scoreboard']:
+                print(f'Player {player_score["username"]}: {player_score["score"]} games won')
+            print('Comments:')
+            for comment in game_info['comments']:
+                print(comment)
+            print()
+        
+        while True:
+            print('Would you like to get all games again? (Yes/No)')
+            games_again = input()
+            if games_again == 'Yes':
+                break
+            elif games_again == 'No':
+                return
+
+
+def get_scoreboard():
+    while True:
+        clear()
+
+        print('Enter the id of the game:', end=' ')
+        game_id = input()
+
+        query = f"""
+        {{
+            getScoreboard(id:{game_id}) {{
+                scoreboard {{
+                    username
+                    score
+                }}
+            }}
+        }}
+        """
+
+        response = requests.post('http://graphql_server:13371/graphql', json={'query': query})
+
+        for player_score in json.loads(response.content.decode())['data']['getScoreboard']['scoreboard']:
+            print(f'Player {player_score["username"]}: {player_score["score"]} games won')
+
+        while True:
+            print('Would you like to get scoreboard of a different game? (Yes/No)')
+            another_scoreboard = input()
+            if another_scoreboard == 'Yes':
+                break
+            elif another_scoreboard == 'No':
+                return
+
+
+def add_comment():
+    clear()
+
+    print('Enter the id of the game:', end=' ')
+    game_id = input()
+
+    print('Enter the comment:', end=' ')
+    comment = input()
+
+    query = f"""
+    {{
+        addComment(id:{game_id}, comment:"{comment}")
+    }}
+    """
+
+    requests.post('http://graphql_server:13371/graphql', json={'query': query})
+
+
 if __name__ == '__main__':
     clear()
 
@@ -395,7 +486,10 @@ if __name__ == '__main__':
         print('B: Modify your profile')
         print('C: Get players` profiles')
         print('D: Get player statistics')
-        print('E: Exit')
+        print('E: Get games')
+        print('F: Get game scoreboard')
+        print('G: Add comment to game')
+        print('H: Exit')
         option = input()
 
         match option:
@@ -408,6 +502,12 @@ if __name__ == '__main__':
             case 'D':
                 get_statistics()
             case 'E':
+                get_games()
+            case 'F':
+                get_scoreboard()
+            case 'G':
+                add_comment()
+            case 'H':
                 break
 
     remove_profile()

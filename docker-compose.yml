@@ -15,6 +15,13 @@ services:
     ports:
       - 13372:13372
 
+  graphql_server:
+    container_name: graphql_server
+    build:
+      dockerfile: graphql_server/Dockerfile
+    ports:
+      - 13371:13371
+
   rabbitmq:
     container_name: rabbitmq
     image: rabbitmq:3-management
