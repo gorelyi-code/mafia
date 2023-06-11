@@ -39,18 +39,31 @@ class Mafia(proto_grpc.MafiaServicer):
         self.users = set()
 
     def DeleteGame(self, game_id, winner, roles, start):
+        scores = []
         if winner == 'Мафия':
             for player, role in roles.items():
                 if role == 'Мафия':
+                    scores.append(1)
                     requests.post(f'http://rest_server:13372/result/{player}', params={'won': True, 'time': datetime.now() - start})
                 else:
+                    scores.append(0)
                     requests.post(f'http://rest_server:13372/result/{player}', params={'won': False, 'time': datetime.now() - start})
         elif winner == 'Мирные':
             for player, role in roles.items():
                 if role == 'Мафия':
+                    scores.append(0)
                     requests.post(f'http://rest_server:13372/result/{player}', params={'won': False, 'time': datetime.now() - start})
                 else:
+                    scores.append(1)
                     requests.post(f'http://rest_server:13372/result/{player}', params={'won': True, 'time': datetime.now() - start})
+
+        query = f"""
+        {{
+            addGame(id: "{game_id}", players: [{"".join([f'"{player}"' for player in roles])}], scores: {scores})
+        }}
+        """
+
+        requests.post('http://graphql_server:13371/graphql', json={'query': query})
 
         del self.games[game_id]
 

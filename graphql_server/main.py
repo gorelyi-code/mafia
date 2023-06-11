@@ -10,7 +10,7 @@ class PlayerScore:
 
 @dataclass
 class GameInfo:
-    id: int
+    id: str
     scoreboard: list[PlayerScore]
     players: list[str]
     comments: list[str] = field(default_factory=list) 
@@ -18,10 +18,7 @@ class GameInfo:
 app = Flask(__name__)
 CORS(app)
 
-games: dict[int, GameInfo] = {
-    '228': GameInfo(228, [PlayerScore('a', 0), PlayerScore('b', 1), PlayerScore('c', 1), PlayerScore('d', 1)], ['a', 'b', 'c', 'd']),
-    '1337': GameInfo(1337, [PlayerScore('e', 1), PlayerScore('f', 0), PlayerScore('g', 0), PlayerScore('h', 0)], ['e', 'f', 'g', 'h']),
-}
+games: dict[str, GameInfo] = dict()
 
 
 @app.route("/graphql", methods=["POST"])
@@ -38,6 +35,14 @@ query = ObjectType("Query")
 @query.field('getGames')
 def resolve_getGames(obj, info):
     return [asdict(game_info) for game_info in games.values()]
+
+
+@query.field('addGame')
+def resolve_addGame(obj, info, id, players, scores):
+    if id in games:
+        return 'Game info already exists!'
+    scoreboard = [PlayerScore(player, score) for player, score in zip(players, scores)]
+    games[id] = GameInfo(id, scoreboard, players)
 
 
 @query.field('getScoreboard')

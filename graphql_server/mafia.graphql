@@ -8,7 +8,7 @@ type PlayerScore {
 }
 
 type GameInfo {
-    id: ID!
+    id: String!
     scoreboard: [PlayerScore]!
     players: [String]!
     comments: [String]
@@ -20,7 +20,8 @@ type ScoreboardResult {
 }
 
 type Query {
+    addGame(id: String!, players: [String]!, scores: [Int]!): String
     getGames: [GameInfo]
-    getScoreboard(id: ID!): ScoreboardResult!
-    addComment(id: ID!, comment: String!): String
+    getScoreboard(id: String!): ScoreboardResult!
+    addComment(id: String!, comment: String!): String
 }

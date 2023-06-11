@@ -427,7 +427,7 @@ def get_scoreboard():
 
         query = f"""
         {{
-            getScoreboard(id:{game_id}) {{
+            getScoreboard(id:"{game_id}") {{
                 scoreboard {{
                     username
                     score
@@ -461,7 +461,7 @@ def add_comment():
 
     query = f"""
     {{
-        addComment(id:{game_id}, comment:"{comment}")
+        addComment(id:"{game_id}", comment:"{comment}")
     }}
     """
 
