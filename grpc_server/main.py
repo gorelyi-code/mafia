@@ -30,7 +30,7 @@ class Mafia(proto_grpc.MafiaServicer):
     def ResetUsers(self, users):
         game_id = str(uuid4())
 
-        users_hash = str(hash(tuple(users)))
+        users_hash = tuple(sorted(users))
 
         self.users_to_game_id[users_hash] = game_id
 
@@ -93,9 +93,12 @@ class Mafia(proto_grpc.MafiaServicer):
     async def StartGame(self, request, context):
         players = [player.name for player in request.players.username]
 
-        users_hash = str(hash(tuple(players)))
+        users = tuple(sorted(players))
 
-        game_id = self.users_to_game_id[users_hash]
+        while users not in self.users_to_game_id:
+            await asyncio.sleep(0.001)
+
+        game_id = self.users_to_game_id[users]
 
         game = self.games[game_id]
 
